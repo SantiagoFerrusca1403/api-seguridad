@@ -3,37 +3,39 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use App\Models\User;
-use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Auth;
 
 class AuthController extends Controller
 {
     public function login(Request $request)
     {
-        // 1. Validar que la petición traiga email y password
-        $request->validate([
-            'email' => 'required|email',
-            'password' => 'required'
+        $credentials = $request->validate([
+            'email' => ['required', 'email'],
+            'password' => ['required', 'string'],
         ]);
 
-        // 2. Buscar al usuario en la base de datos
-        $user = User::where('email', $request->email)->first();
-
-        // 3. Verificar si el usuario existe y la contraseña coincide
-        if (!$user || !Hash::check($request->password, $user->password)) {
-            return response()->json([
-                'mensaje' => 'Credenciales incorrectas'
-            ], 401);
+        if (! $token = Auth::guard('api')->attempt($credentials)) {
+            return response()->json(['mensaje' => 'Credenciales incorrectas'], 401);
         }
 
-        // 4. Crear el token de seguridad (Sanctum)
-        $token = $user->createToken('token-seguridad')->plainTextToken;
+        return $this->respondWithToken($token);
+    }
 
-        // 5. Responder con el token
+    public function logout()
+    {
+        Auth::guard('api')->logout();
+
+        return response()->json(['mensaje' => 'Sesión cerrada']);
+    }
+
+    private function respondWithToken(string $token)
+    {
         return response()->json([
             'mensaje' => 'Login exitoso',
             'token' => $token,
-            'usuario' => $user->name
+            'token_type' => 'Bearer',
+            'expires_in' => Auth::guard('api')->factory()->getTTL() * 60,
+            'usuario' => Auth::guard('api')->user()->name,
         ]);
     }
 }
